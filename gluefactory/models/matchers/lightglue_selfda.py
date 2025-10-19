@@ -284,8 +284,7 @@ class SelfBlock(nn.Module):
         # encoding: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        qkv = self.Wqkv(x)
-        qkv = qkv.unflatten(-1, (self.num_heads, -1, 3)).transpose(1, 2)
+        qkv = self.Wqkv(x)  # [B, N, 3D]
         q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
         # q = apply_cached_rotary_emb(encoding, q)
         # k = apply_cached_rotary_emb(encoding, k)
@@ -381,7 +380,7 @@ class TransformerLayer(nn.Module):
         mask1: Optional[torch.Tensor] = None,
     ):
         if mask0 is not None and mask1 is not None:
-            return self.masked_forward(desc0, desc1, encoding0, encoding1, mask0, mask1)
+            return self.masked_forward(desc0, desc1, mask0, mask1)
         else:
             desc0 = self.self_attn(desc0)
             desc1 = self.self_attn(desc1)
@@ -598,8 +597,8 @@ class LightGlue(nn.Module):
         desc0 = self.input_proj(desc0)
         desc1 = self.input_proj(desc1)
         # cache positional embeddings
-        encoding0 = self.posenc(kpts0)
-        encoding1 = self.posenc(kpts1)
+        # encoding0 = self.posenc(kpts0)
+        # encoding1 = self.posenc(kpts1)
 
         # GNN + final_proj + assignment
         do_early_stop = self.conf.depth_confidence > 0 and not self.training
@@ -620,12 +619,12 @@ class LightGlue(nn.Module):
                     self.transformers[i],
                     desc0,
                     desc1,
-                    encoding0,
-                    encoding1,
+                    # encoding0,
+                    # encoding1,
                     use_reentrant=False,  # Recommended by torch, default was True
                 )
             else:
-                desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
+                desc0, desc1 = self.transformers[i](desc0, desc1)
             if self.training or i == self.conf.n_layers - 1:
                 all_desc0.append(desc0)
                 all_desc1.append(desc1)
@@ -644,14 +643,14 @@ class LightGlue(nn.Module):
                 keep0 = torch.where(prunemask0)[1]
                 ind0 = ind0.index_select(1, keep0)
                 desc0 = desc0.index_select(1, keep0)
-                encoding0 = encoding0.index_select(-2, keep0)
+                # encoding0 = encoding0.index_select(-2, keep0)
                 prune0[:, ind0] += 1
                 scores1 = self.log_assignment[i].get_matchability(desc1)
                 prunemask1 = self.get_pruning_mask(token1, scores1, i)
                 keep1 = torch.where(prunemask1)[1]
                 ind1 = ind1.index_select(1, keep1)
                 desc1 = desc1.index_select(1, keep1)
-                encoding1 = encoding1.index_select(-2, keep1)
+                # encoding1 = encoding1.index_select(-2, keep1)
                 prune1[:, ind1] += 1
 
         desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]

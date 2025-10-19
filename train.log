@@ -1,0 +1,192 @@
+nohup: ignoring input
+[10/20/2025 00:42:26 gluefactory INFO] Starting experiment sp+lg_selfda_homography
+[10/20/2025 00:42:32 gluefactory INFO] Training in distributed mode with 2 GPUs
+[10/20/2025 00:42:32 gluefactory INFO] Training in distributed mode with 2 GPUs
+[10/20/2025 00:42:33 gluefactory INFO] Using device 0
+[10/20/2025 00:42:33 gluefactory INFO] Using device 1
+[10/20/2025 00:42:40 gluefactory.datasets.base_dataset INFO] Creating dataset HomographyDataset
+[10/20/2025 00:42:40 gluefactory.datasets.base_dataset INFO] Creating dataset HomographyDataset
+[10/20/2025 00:42:46 gluefactory.datasets.homographies INFO] Found 1001001 images in list file.
+/gemini/final/gluefactory/datasets/augmentations.py:130: UserWarning: Argument(s) 'always_apply' are not valid for transform FromFloat
+  self.preprocess = A.FromFloat(always_apply=True, dtype="uint8")
+/gemini/final/gluefactory/datasets/augmentations.py:131: UserWarning: Argument(s) 'always_apply' are not valid for transform ToFloat
+  self.postprocess = A.ToFloat(always_apply=True)
+[10/20/2025 00:42:47 gluefactory INFO] Training loader has 1171 batches
+[10/20/2025 00:42:47 gluefactory INFO] Validation loader has 32 batches
+[10/20/2025 00:42:47 gluefactory.datasets.homographies INFO] Found 1001001 images in list file.
+/gemini/final/gluefactory/datasets/augmentations.py:130: UserWarning: Argument(s) 'always_apply' are not valid for transform FromFloat
+  self.preprocess = A.FromFloat(always_apply=True, dtype="uint8")
+/gemini/final/gluefactory/datasets/augmentations.py:131: UserWarning: Argument(s) 'always_apply' are not valid for transform ToFloat
+  self.postprocess = A.ToFloat(always_apply=True)
+[10/20/2025 00:42:50 gluefactory INFO] Parameters with scaled learning rate:
+{}
+[10/20/2025 00:42:50 gluefactory INFO] Training with mixed_precision=None
+[10/20/2025 00:42:50 gluefactory INFO] Starting training with configuration:
+data:
+  name: homographies
+  data_dir: revisitop1m
+  train_size: 150000
+  val_size: 2000
+  batch_size: 128
+  num_workers: 14
+  homography:
+    difficulty: 0.7
+    max_angle: 45
+  photometric:
+    name: lg
+model:
+  name: two_view_pipeline
+  extractor:
+    name: gluefactory_nonfree.superpoint
+    max_num_keypoints: 512
+    force_num_keypoints: true
+    detection_threshold: 0.0
+    nms_radius: 3
+    trainable: false
+  ground_truth:
+    name: matchers.homography_matcher
+    th_positive: 3
+    th_negative: 3
+  matcher:
+    name: matchers.lightglue_selfda
+    filter_threshold: 0.1
+    flash: false
+    checkpointed: true
+train:
+  seed: 0
+  epochs: 40
+  optimizer: adam
+  opt_regexp: null
+  optimizer_options: {}
+  lr: 0.0001
+  lr_schedule:
+    type: exp
+    start: 20
+    exp_div_10: 10
+    on_epoch: true
+    factor: 1.0
+    options: {}
+  lr_scaling:
+  - - 100
+    - - dampingnet.const
+  eval_every_iter: 500
+  save_every_iter: 5000
+  log_every_iter: 100
+  log_grad_every_iter: null
+  test_every_epoch: 1
+  keep_last_checkpoints: 10
+  load_experiment: null
+  median_metrics: []
+  recall_metrics: {}
+  pr_metrics: {}
+  best_key: loss/total
+  dataset_callback_fn: null
+  dataset_callback_on_val: false
+  clip_grad: null
+  pr_curves: {}
+  plot:
+  - 5
+  - gluefactory.visualization.visualize_batch.make_match_figures
+  submodules: []
+benchmarks:
+  hpatches:
+    eval:
+      estimator: opencv
+      ransac_th: 0.5
+'True': null
+
+[10/20/2025 00:42:50 gluefactory INFO] Starting epoch 0
+[10/20/2025 00:42:50 gluefactory INFO] Parameters with scaled learning rate:
+{}
+[10/20/2025 00:42:50 gluefactory INFO] Training with mixed_precision=None
+No fused RMSNorm
+No fused RMSNorm
+Premature end of JPEG file
+[rank0]:[W1020 00:45:07.767700854 ProcessGroupNCCL.cpp:1496] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+W1020 00:45:08.547000 16925 site-packages/torch/multiprocessing/spawn.py:169] Terminating process 17072 via signal SIGTERM
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/gemini/final/gluefactory/train.py", line 732, in <module>
+    torch.multiprocessing.spawn(
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 340, in spawn
+    return start_processes(fn, args, nprocs, join, daemon, start_method="spawn")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 296, in start_processes
+    while not context.join():
+              ^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 215, in join
+    raise ProcessRaisedException(msg, error_index, failed_process.pid)
+torch.multiprocessing.spawn.ProcessRaisedException: 
+
+-- Process 0 terminated with the following error:
+Traceback (most recent call last):
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 90, in _wrap
+    fn(i, *args)
+  File "/gemini/final/gluefactory/train.py", line 667, in main_worker
+    training(rank, conf, output_dir, args)
+  File "/gemini/final/gluefactory/train.py", line 474, in training
+    pred = model(data)
+           ^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1643, in forward
+    else self._run_ddp_forward(*inputs, **kwargs)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1459, in _run_ddp_forward
+    return self.module(*inputs, **kwargs)  # type: ignore[index]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gemini/final/gluefactory/models/base_model.py", line 114, in forward
+    return self._forward(data)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/gemini/final/gluefactory/models/two_view_pipeline.py", line 81, in _forward
+    pred = {**pred, **self.matcher({**data, **pred})}
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gemini/final/gluefactory/models/matchers/lightglue_selfda.py", line 619, in forward
+    desc0, desc1 = torch.utils.checkpoint.checkpoint(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/_compile.py", line 32, in inner
+    return disable_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 745, in _fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/checkpoint.py", line 496, in checkpoint
+    ret = function(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gemini/final/gluefactory/models/matchers/lightglue_selfda.py", line 386, in forward
+    desc0 = self.self_attn(desc0)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gemini/final/gluefactory/models/matchers/lightglue_selfda.py", line 295, in forward
+    q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim).transpose(1, 2)         # [B, 2*H, N, D]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: shape '[64, 4, 8, 32]' is invalid for input of size 8388608
+
