@@ -134,6 +134,16 @@ def compute_rel_pos_for_flashdiff2(batch_size, seq_len, embed_dim, num_heads, de
     return cos, sin
 
 
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    x = x.unflatten(-1, (-1, 2))
+    x1, x2 = x.unbind(dim=-1)
+    return torch.stack((-x2, x1), dim=-1).flatten(start_dim=-2)
+
+
+def apply_cached_rotary_emb(freqs: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    return (t * freqs[0]) + (rotate_half(t) * freqs[1])
+
+
 class MultiheadFlashDiff2(nn.Module):
     """
     DiffAttn implemented with FlashAttention, for packages that does not support different qk/v dimensions
@@ -180,8 +190,9 @@ class MultiheadFlashDiff2(nn.Module):
     def forward(
         self,
         q, k, v,
-        rel_pos,
-        attn_mask=None,
+        # rel_pos,
+        encoding,
+        mask=None,
     ):
         bsz, _, tgt_len, _ = q.size()   # [B, 2*H, N, D], [B, 2*H, N, D], [B, H, N, 2*D]
         src_len = tgt_len
@@ -190,12 +201,12 @@ class MultiheadFlashDiff2(nn.Module):
         # k = self.k_proj(x)
         # v = self.v_proj(x)
 
-        q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
-        k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
-        v = v.view(bsz, src_len, self.num_kv_heads, 2, self.head_dim)
+        q = apply_cached_rotary_emb(encoding, q)
+        k = apply_cached_rotary_emb(encoding, k)
 
-        q = apply_rotary_emb(q, *rel_pos, interleaved=True)
-        k = apply_rotary_emb(k, *rel_pos, interleaved=True)
+        q = q.reshape(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
+        k = k.reshape(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
+        v = v.reshape(bsz, src_len, self.num_kv_heads, 2, self.head_dim)
 
         offset = src_len - tgt_len
         q = q.reshape(bsz, tgt_len, self.num_heads, 2, self.head_dim)
@@ -266,6 +277,7 @@ class SelfBlock(nn.Module):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads if num_kv_heads is not None else num_heads
         assert self.embed_dim % num_heads == 0
         self.head_dim = self.embed_dim // num_heads // 2
         self.Wqkv = nn.Linear(embed_dim, 3 * embed_dim, bias=bias)
@@ -281,13 +293,13 @@ class SelfBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        # encoding: torch.Tensor,
+        encoding: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         qkv = self.Wqkv(x)  # [B, N, 3D]
+        qkv = qkv.unflatten(-1, (-1, 3))    # [B, N, D, 3]
         q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
-        # q = apply_cached_rotary_emb(encoding, q)
-        # k = apply_cached_rotary_emb(encoding, k)
+
         bsz, tgt_len, _ = q.size()
         src_len = tgt_len
 
@@ -295,9 +307,9 @@ class SelfBlock(nn.Module):
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim).transpose(1, 2)      # [B, 2*H, N, D]
         v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim).transpose(1, 2)      # [B, H, N, 2*D]
 
-        cos, sin = compute_rel_pos_for_flashdiff2(bsz, tgt_len, head_dim, num_heads, device)
-        rel_pos = (cos, sin)
-        context = self.inner_attn(q, k, v, rel_pos, mask=mask)
+        # cos, sin = compute_rel_pos_for_flashdiff2(bsz, tgt_len, self.head_dim, self.num_heads, x.device)
+        # rel_pos = (cos, sin)
+        context = self.inner_attn(q, k, v, encoding, mask=mask)
         message = self.out_proj(context)
         return x + self.ffn(torch.cat([x, message], -1))
 
@@ -374,25 +386,25 @@ class TransformerLayer(nn.Module):
         self,
         desc0,
         desc1,
-        # encoding0,
-        # encoding1,
+        encoding0,
+        encoding1,
         mask0: Optional[torch.Tensor] = None,
         mask1: Optional[torch.Tensor] = None,
     ):
         if mask0 is not None and mask1 is not None:
-            return self.masked_forward(desc0, desc1, mask0, mask1)
+            return self.masked_forward(desc0, desc1, encoding0, encoding1, mask0, mask1)
         else:
-            desc0 = self.self_attn(desc0)
-            desc1 = self.self_attn(desc1)
+            desc0 = self.self_attn(desc0, encoding0)
+            desc1 = self.self_attn(desc1, encoding1)
             return self.cross_attn(desc0, desc1)
 
     # This part is compiled and allows padding inputs
-    def masked_forward(self, desc0, desc1, mask0, mask1):
+    def masked_forward(self, desc0, desc1, encoding0, encoding1, mask0, mask1):
         mask = mask0 & mask1.transpose(-1, -2)
         mask0 = mask0 & mask0.transpose(-1, -2)
         mask1 = mask1 & mask1.transpose(-1, -2)
-        desc0 = self.self_attn(desc0, mask0)
-        desc1 = self.self_attn(desc1, mask1)
+        desc0 = self.self_attn(desc0, encoding0, mask0)
+        desc1 = self.self_attn(desc1, encoding1, mask1)
         return self.cross_attn(desc0, desc1, mask)
 
 
@@ -597,8 +609,8 @@ class LightGlue(nn.Module):
         desc0 = self.input_proj(desc0)
         desc1 = self.input_proj(desc1)
         # cache positional embeddings
-        # encoding0 = self.posenc(kpts0)
-        # encoding1 = self.posenc(kpts1)
+        encoding0 = self.posenc(kpts0)
+        encoding1 = self.posenc(kpts1)
 
         # GNN + final_proj + assignment
         do_early_stop = self.conf.depth_confidence > 0 and not self.training
@@ -619,8 +631,8 @@ class LightGlue(nn.Module):
                     self.transformers[i],
                     desc0,
                     desc1,
-                    # encoding0,
-                    # encoding1,
+                    encoding0,
+                    encoding1,
                     use_reentrant=False,  # Recommended by torch, default was True
                 )
             else:
@@ -643,14 +655,14 @@ class LightGlue(nn.Module):
                 keep0 = torch.where(prunemask0)[1]
                 ind0 = ind0.index_select(1, keep0)
                 desc0 = desc0.index_select(1, keep0)
-                # encoding0 = encoding0.index_select(-2, keep0)
+                encoding0 = encoding0.index_select(-2, keep0)
                 prune0[:, ind0] += 1
                 scores1 = self.log_assignment[i].get_matchability(desc1)
                 prunemask1 = self.get_pruning_mask(token1, scores1, i)
                 keep1 = torch.where(prunemask1)[1]
                 ind1 = ind1.index_select(1, keep1)
                 desc1 = desc1.index_select(1, keep1)
-                # encoding1 = encoding1.index_select(-2, keep1)
+                encoding1 = encoding1.index_select(-2, keep1)
                 prune1[:, ind1] += 1
 
         desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]

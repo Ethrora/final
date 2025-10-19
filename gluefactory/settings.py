@@ -1,7 +1,7 @@
 from pathlib import Path
 
 root = Path(__file__).parent.parent  # top-level directory
-DATA_PATH = ""
+DATA_PATH = Path("/gemini")
 DATA_PATH_HOMO = Path("/gemini/data-1")  # datasets and pretrained weights
 DATA_PATH_MEGA = Path("/gemini/data-2")  # datasets and pretrained weights
 DATA_PATH_HPAT = Path("/gemini/data-3")  # datasets and pretrained weights
