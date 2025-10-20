@@ -636,7 +636,7 @@ class LightGlue(nn.Module):
                     use_reentrant=False,  # Recommended by torch, default was True
                 )
             else:
-                desc0, desc1 = self.transformers[i](desc0, desc1)
+                desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
             if self.training or i == self.conf.n_layers - 1:
                 all_desc0.append(desc0)
                 all_desc1.append(desc1)
