@@ -215,12 +215,12 @@ class MultiheadFlashDiff2(nn.Module):
         k1, k2 = k[:, :, :, 0], k[:, :, :, 1]
         v1, v2 = v[:, :, :, 0], v[:, :, :, 1]
 
-        attn11 = flash_attn_func(q1, k1, v1, causal=True)
-        attn12 = flash_attn_func(q1, k1, v2, causal=True)
+        attn11 = flash_attn_func(q1.to(torch.bfloat16), k1.to(torch.bfloat16), v1.to(torch.bfloat16), causal=True)
+        attn12 = flash_attn_func(q1.to(torch.bfloat16), k1.to(torch.bfloat16), v2.to(torch.bfloat16), causal=True)
         attn1 = torch.cat([attn11, attn12], dim=-1)
         
-        attn21 = flash_attn_func(q2, k2, v1, causal=True)
-        attn22 = flash_attn_func(q2, k2, v2, causal=True)
+        attn21 = flash_attn_func(q2.to(torch.bfloat16), k2.to(torch.bfloat16), v1.to(torch.bfloat16), causal=True)
+        attn22 = flash_attn_func(q2.to(torch.bfloat16), k2.to(torch.bfloat16), v2.to(torch.bfloat16), causal=True)
         attn2 = torch.cat([attn21, attn22], dim=-1)
         
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
