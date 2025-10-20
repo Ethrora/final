@@ -1,31 +1,18 @@
 nohup: ignoring input
-[10/20/2025 23:03:08 gluefactory INFO] Starting experiment sp+lg_selfda_homography
-[10/20/2025 23:03:13 gluefactory INFO] Training in distributed mode with 2 GPUs
-[10/20/2025 23:03:13 gluefactory INFO] Training in distributed mode with 2 GPUs
-[10/20/2025 23:03:14 gluefactory INFO] Using device 0
-[10/20/2025 23:03:14 gluefactory INFO] Using device 1
-[10/20/2025 23:03:21 gluefactory.datasets.base_dataset INFO] Creating dataset HomographyDataset
-[10/20/2025 23:03:21 gluefactory.datasets.base_dataset INFO] Creating dataset HomographyDataset
-[10/20/2025 23:03:28 gluefactory.datasets.homographies INFO] Found 1001001 images in list file.
-[10/20/2025 23:03:29 gluefactory.datasets.homographies INFO] Found 1001001 images in list file.
+[10/21/2025 00:21:41 gluefactory INFO] Starting experiment sp+lg_selfda_homography
+[10/21/2025 00:21:41 gluefactory INFO] Using device cuda
+[10/21/2025 00:21:47 gluefactory.datasets.base_dataset INFO] Creating dataset HomographyDataset
+[10/21/2025 00:21:54 gluefactory.datasets.homographies INFO] Found 1001001 images in list file.
 /gemini/final/gluefactory/datasets/augmentations.py:130: UserWarning: Argument(s) 'always_apply' are not valid for transform FromFloat
   self.preprocess = A.FromFloat(always_apply=True, dtype="uint8")
 /gemini/final/gluefactory/datasets/augmentations.py:131: UserWarning: Argument(s) 'always_apply' are not valid for transform ToFloat
   self.postprocess = A.ToFloat(always_apply=True)
-/gemini/final/gluefactory/datasets/augmentations.py:130: UserWarning: Argument(s) 'always_apply' are not valid for transform FromFloat
-  self.preprocess = A.FromFloat(always_apply=True, dtype="uint8")
-/gemini/final/gluefactory/datasets/augmentations.py:131: UserWarning: Argument(s) 'always_apply' are not valid for transform ToFloat
-  self.postprocess = A.ToFloat(always_apply=True)
-[10/20/2025 23:03:29 gluefactory INFO] Training loader has 1171 batches
-[10/20/2025 23:03:29 gluefactory INFO] Validation loader has 32 batches
-[10/20/2025 23:03:32 gluefactory INFO] Parameters with scaled learning rate:
+[10/21/2025 00:21:55 gluefactory INFO] Training loader has 1171 batches
+[10/21/2025 00:21:55 gluefactory INFO] Validation loader has 16 batches
+[10/21/2025 00:21:57 gluefactory INFO] Parameters with scaled learning rate:
 {}
-[10/20/2025 23:03:32 gluefactory INFO] Training with mixed_precision=None
-No fused RMSNorm
-[10/20/2025 23:03:32 gluefactory INFO] Parameters with scaled learning rate:
-{}
-[10/20/2025 23:03:32 gluefactory INFO] Training with mixed_precision=None
-[10/20/2025 23:03:32 gluefactory INFO] Starting training with configuration:
+[10/21/2025 00:21:58 gluefactory INFO] Training with mixed_precision=None
+[10/21/2025 00:21:58 gluefactory INFO] Starting training with configuration:
 data:
   name: homographies
   data_dir: revisitop1m
@@ -97,125 +84,15 @@ benchmarks:
     eval:
       estimator: opencv
       ransac_th: 0.5
-'True': null
 
-[10/20/2025 23:03:32 gluefactory INFO] Starting epoch 0
+[10/21/2025 00:21:58 gluefactory INFO] Starting epoch 0
 No fused RMSNorm
+[10/21/2025 00:23:15 gluefactory INFO] [E 0 | it 0] loss {total 8.023E+00, last 7.155E+00, assignment_nll 7.155E+00, nll_pos 1.370E+01, nll_neg 6.114E-01, num_matchable 1.852E+02, num_unmatchable 3.130E+02, confidence 8.547E-01, row_norm 5.512E-01}
+Evaluation:   0%|          | 0/16 [00:00<?, ?it/s]Evaluation:   6%|6         | 1/16 [00:35<08:50, 35.34s/it]Evaluation:  12%|#2        | 2/16 [00:44<04:38, 19.86s/it]Evaluation:  19%|#8        | 3/16 [00:49<02:50, 13.15s/it]Evaluation:  25%|##5       | 4/16 [00:54<01:58,  9.86s/it]Evaluation:  31%|###1      | 5/16 [00:59<01:28,  8.09s/it]Evaluation:  38%|###7      | 6/16 [01:04<01:10,  7.02s/it]Evaluation:  44%|####3     | 7/16 [01:13<01:09,  7.71s/it]Evaluation:  50%|#####     | 8/16 [01:18<00:54,  6.85s/it]Evaluation:  56%|#####6    | 9/16 [01:27<00:52,  7.51s/it]Evaluation:  62%|######2   | 10/16 [01:36<00:47,  7.97s/it]Evaluation:  69%|######8   | 11/16 [01:41<00:35,  7.02s/it]Evaluation:  75%|#######5  | 12/16 [01:46<00:25,  6.43s/it]Evaluation:  81%|########1 | 13/16 [01:51<00:18,  6.05s/it]Evaluation:  88%|########7 | 14/16 [02:00<00:14,  7.08s/it]Evaluation:  94%|#########3| 15/16 [02:05<00:06,  6.45s/it]Evaluation: 100%|##########| 16/16 [02:17<00:00,  7.95s/it]Evaluation: 100%|##########| 16/16 [02:17<00:00,  8.61s/it]
+[10/21/2025 00:25:33 gluefactory INFO] [Validation] {match_recall 0.000E+00, match_precision 0.000E+00, accuracy 6.224E-01, average_precision 0.000E+00, loss/total 7.501E+00, loss/last 7.501E+00, loss/assignment_nll 7.501E+00, loss/nll_pos 1.168E+01, loss/nll_neg 3.325E+00, loss/num_matchable 1.891E+02, loss/num_unmatchable 3.105E+02, loss/row_norm 4.038E-02}
+[10/21/2025 00:25:34 gluefactory.utils.experiments INFO] Saving checkpoint checkpoint_best.tar
+[10/21/2025 00:25:37 gluefactory INFO] New best val: loss/total=7.501054382324218
 Premature end of JPEG file
-[10/20/2025 23:05:51 gluefactory INFO] [E 0 | it 0] loss {total 8.046E+00, last 7.205E+00, assignment_nll 7.205E+00, nll_pos 1.380E+01, nll_neg 6.050E-01, num_matchable 1.968E+02, num_unmatchable 3.038E+02, confidence 8.554E-01, row_norm 5.536E-01}
-Evaluation:   0%|          | 0/32 [00:00<?, ?it/s]Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7fb90c2b72e0>
-Traceback (most recent call last):
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1618, in __del__
-    self._shutdown_workers()
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1582, in _shutdown_workers
-    w.join(timeout=_utils.MP_STATUS_CHECK_INTERVAL)
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/multiprocessing/process.py", line 149, in join
-    res = self._popen.wait(timeout)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/multiprocessing/popen_fork.py", line 40, in wait
-    if not wait([self.sentinel], timeout):
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/multiprocessing/connection.py", line 1136, in wait
-    ready = selector.select(timeout)
-            ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/selectors.py", line 415, in select
-    fd_event_list = self._selector.poll(timeout)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/data/_utils/signal_handling.py", line 73, in handler
-    _error_if_any_worker_fails()
-RuntimeError: DataLoader worker (pid 145204) is killed by signal: Aborted. 
-Evaluation:   0%|          | 0/32 [01:57<?, ?it/s]
-Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7f7629ab72e0>
-Traceback (most recent call last):
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1618, in __del__
-    self._shutdown_workers()
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1582, in _shutdown_workers
-    w.join(timeout=_utils.MP_STATUS_CHECK_INTERVAL)
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/multiprocessing/process.py", line 149, in join
-    res = self._popen.wait(timeout)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/multiprocessing/popen_fork.py", line 40, in wait
-    if not wait([self.sentinel], timeout):
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/multiprocessing/connection.py", line 1136, in wait
-    ready = selector.select(timeout)
-            ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/selectors.py", line 415, in select
-    fd_event_list = self._selector.poll(timeout)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/data/_utils/signal_handling.py", line 73, in handler
-    _error_if_any_worker_fails()
-RuntimeError: DataLoader worker (pid 145201) is killed by signal: Aborted. 
-[rank0]:[W1020 23:07:51.328799667 ProcessGroupNCCL.cpp:1496] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
-W1020 23:07:53.088000 142193 site-packages/torch/multiprocessing/spawn.py:169] Terminating process 142282 via signal SIGTERM
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/gemini/final/gluefactory/train.py", line 732, in <module>
-    torch.multiprocessing.spawn(
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 340, in spawn
-    return start_processes(fn, args, nprocs, join, daemon, start_method="spawn")
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 296, in start_processes
-    while not context.join():
-              ^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 215, in join
-    raise ProcessRaisedException(msg, error_index, failed_process.pid)
-torch.multiprocessing.spawn.ProcessRaisedException: 
-
--- Process 0 terminated with the following error:
-Traceback (most recent call last):
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/multiprocessing/spawn.py", line 90, in _wrap
-    fn(i, *args)
-  File "/gemini/final/gluefactory/train.py", line 667, in main_worker
-    training(rank, conf, output_dir, args)
-  File "/gemini/final/gluefactory/train.py", line 571, in training
-    results, pr_metrics, figures = do_evaluation(
-                                   ^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/gemini/final/gluefactory/train.py", line 92, in do_evaluation
-    pred = model(data)
-           ^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1643, in forward
-    else self._run_ddp_forward(*inputs, **kwargs)
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1459, in _run_ddp_forward
-    return self.module(*inputs, **kwargs)  # type: ignore[index]
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/gemini/final/gluefactory/models/base_model.py", line 114, in forward
-    return self._forward(data)
-           ^^^^^^^^^^^^^^^^^^^
-  File "/gemini/final/gluefactory/models/two_view_pipeline.py", line 81, in _forward
-    pred = {**pred, **self.matcher({**data, **pred})}
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/gemini/final/gluefactory/models/matchers/lightglue_selfda.py", line 639, in forward
-    desc0, desc1 = self.transformers[i](desc0, desc1)
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/miniconda3/envs/glue_factory/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
-    return forward_call(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: TransformerLayer.forward() missing 2 required positional arguments: 'encoding0' and 'encoding1'
-
+Premature end of JPEG file
+[10/21/2025 00:37:19 gluefactory INFO] [E 0 | it 100] loss {total 3.063E+00, last 2.310E+00, assignment_nll 2.310E+00, nll_pos 3.627E+00, nll_neg 9.934E-01, num_matchable 1.935E+02, num_unmatchable 3.059E+02, confidence 4.681E-01, row_norm 5.083E-01}
+[10/21/2025 00:49:00 gluefactory INFO] [E 0 | it 200] loss {total 2.197E+00, last 1.531E+00, assignment_nll 1.531E+00, nll_pos 2.372E+00, nll_neg 6.902E-01, num_matchable 2.006E+02, num_unmatchable 3.004E+02, confidence 4.000E-01, row_norm 6.722E-01}

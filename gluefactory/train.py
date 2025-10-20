@@ -12,6 +12,7 @@ import signal
 from collections import defaultdict
 from pathlib import Path
 from pydoc import locate
+import datetime
 
 import numpy as np
 import torch
@@ -278,6 +279,7 @@ def training(rank, conf, output_dir, args):
             world_size=args.n_gpus,
             rank=device,
             init_method="file://" + str(args.lock_file),
+            timeout=datetime.timedelta(seconds=5400)
         )
         torch.cuda.set_device(device)
 
@@ -693,7 +695,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--overfit", action="store_true")
     parser.add_argument("--restore", action="store_true")
-    parser.add_argument("--distributed", action="store_true")
+    parser.add_argument("--distributed", default=False, action="store_true")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--print_arch", "--pa", action="store_true")
     parser.add_argument("--detect_anomaly", "--da", action="store_true")
