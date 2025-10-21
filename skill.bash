@@ -1,5 +1,5 @@
 --------------train--------------
-nohup env CUDA_VISIBLE_DEVICES=0,1 python -m gluefactory.train sp+lg_selfda_homography --distributed True --conf gluefactory/configs/superpoint+lightglue_homography.yaml > train.log 2>&1 &
+nohup env CUDA_VISIBLE_DEVICES=0,1 python -m gluefactory.train sp+lg_selfda_mulit_homography --distributed True --conf gluefactory/configs/superpoint+lightglue_homography.yaml > train.log 2>&1 &
 
 nohup env CUDA_VISIBLE_DEVICES=0,1 python -m gluefactory.train sp+lg_megadepth --distributed True --conf gluefactory/configs/superpoint+lightglue_megadepth.yaml train.load_experiment=sp+lg_homography > finetune_32bs.log 2>&1 &
 

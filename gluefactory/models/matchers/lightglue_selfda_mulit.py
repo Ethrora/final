@@ -245,12 +245,12 @@ class SelfBlock_da(nn.Module):
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.num_kv_heads = num_kv_heads if num_kv_heads is not None else num_heads
+        self.num_heads = num_heads // 2
+        self.num_kv_heads = num_kv_heads if num_kv_heads is not None else num_heads // 2
         # assert self.embed_dim % num_heads == 0
-        self.head_dim = self.embed_dim // num_heads // 2
+        self.head_dim = self.embed_dim // num_heads
         self.Wqkv = nn.Linear(embed_dim, 3 * embed_dim, bias=bias)
-        self.inner_attn = MultiheadDiffAttn(embed_dim=embed_dim, depth=0, num_heads=num_heads, num_kv_heads=None)
+        self.inner_attn = MultiheadDiffAttn(embed_dim=embed_dim, depth=0, num_heads=num_heads // 2, num_kv_heads=None)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
         self.ffn = nn.Sequential(
             nn.Linear(2 * embed_dim, 2 * embed_dim),
@@ -533,7 +533,7 @@ class LightGlue(nn.Module):
         else:
             self.input_proj = nn.Identity()
 
-        head_dim = conf.descriptor_dim // conf.num_heads // 2
+        head_dim = conf.descriptor_dim // conf.num_heads
         self.posenc = LearnableFourierPositionalEncoding(
             2 + 2 * conf.add_scale_ori, head_dim, head_dim
         )
