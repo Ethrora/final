@@ -205,41 +205,41 @@ class MultiheadDiffAttn(nn.Module):
         return attn
 
 
-# class Attention(nn.Module):
-#     def __init__(self, allow_flash: bool) -> None:
-#         super().__init__()
-#         if allow_flash and not FLASH_AVAILABLE:
-#             warnings.warn(
-#                 "FlashAttention is not available. For optimal speed, "
-#                 "consider installing torch >= 2.0 or flash-attn.",
-#                 stacklevel=2,
-#             )
-#         self.enable_flash = allow_flash and FLASH_AVAILABLE
+class Attention(nn.Module):
+    def __init__(self, allow_flash: bool) -> None:
+        super().__init__()
+        if allow_flash and not FLASH_AVAILABLE:
+            warnings.warn(
+                "FlashAttention is not available. For optimal speed, "
+                "consider installing torch >= 2.0 or flash-attn.",
+                stacklevel=2,
+            )
+        self.enable_flash = allow_flash and FLASH_AVAILABLE
 
-#         if FLASH_AVAILABLE:
-#             torch.backends.cuda.enable_flash_sdp(allow_flash)
+        if FLASH_AVAILABLE:
+            torch.backends.cuda.enable_flash_sdp(allow_flash)
 
-#     def forward(self, q, k, v, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-#         if self.enable_flash and q.device.type == "cuda":
-#             # use torch 2.0 scaled_dot_product_attention with flash
-#             if FLASH_AVAILABLE:
-#                 args = [x.half().contiguous() for x in [q, k, v]]
-#                 v = F.scaled_dot_product_attention(*args, attn_mask=mask).to(q.dtype)
-#                 return v if mask is None else v.nan_to_num()
-#         elif FLASH_AVAILABLE:
-#             args = [x.contiguous() for x in [q, k, v]]
-#             v = F.scaled_dot_product_attention(*args, attn_mask=mask)
-#             return v if mask is None else v.nan_to_num()
-#         else:
-#             s = q.shape[-1] ** -0.5
-#             sim = torch.einsum("...id,...jd->...ij", q, k) * s
-#             if mask is not None:
-#                 sim.masked_fill(~mask, -float("inf"))
-#             attn = F.softmax(sim, -1)
-#             return torch.einsum("...ij,...jd->...id", attn, v)
+    def forward(self, q, k, v, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if self.enable_flash and q.device.type == "cuda":
+            # use torch 2.0 scaled_dot_product_attention with flash
+            if FLASH_AVAILABLE:
+                args = [x.half().contiguous() for x in [q, k, v]]
+                v = F.scaled_dot_product_attention(*args, attn_mask=mask).to(q.dtype)
+                return v if mask is None else v.nan_to_num()
+        elif FLASH_AVAILABLE:
+            args = [x.contiguous() for x in [q, k, v]]
+            v = F.scaled_dot_product_attention(*args, attn_mask=mask)
+            return v if mask is None else v.nan_to_num()
+        else:
+            s = q.shape[-1] ** -0.5
+            sim = torch.einsum("...id,...jd->...ij", q, k) * s
+            if mask is not None:
+                sim.masked_fill(~mask, -float("inf"))
+            attn = F.softmax(sim, -1)
+            return torch.einsum("...ij,...jd->...id", attn, v)
 
 
-class SelfBlock(nn.Module):
+class SelfBlock_da(nn.Module):
     def __init__(
         self, embed_dim: int, num_heads: int, bias: bool = True, num_kv_heads=None,
     ) -> None:
@@ -286,9 +286,43 @@ class SelfBlock(nn.Module):
         return x + self.ffn(torch.cat([x, message], -1))
 
 
+class SelfBlock_mulit(nn.Module):
+    def __init__(
+        self, embed_dim: int, num_heads: int, flash: bool = True, bias: bool = True
+    ) -> None:
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        assert self.embed_dim % num_heads == 0
+        self.head_dim = self.embed_dim // num_heads
+        self.Wqkv = nn.Linear(embed_dim, 3 * embed_dim, bias=bias)
+        self.inner_attn = Attention(flash)
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+        self.ffn = nn.Sequential(
+            nn.Linear(2 * embed_dim, 2 * embed_dim),
+            nn.LayerNorm(2 * embed_dim, elementwise_affine=True),
+            nn.GELU(),
+            nn.Linear(2 * embed_dim, embed_dim),
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        encoding: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        qkv = self.Wqkv(x)
+        qkv = qkv.unflatten(-1, (self.num_heads, -1, 3)).transpose(1, 2)
+        q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
+        q = apply_cached_rotary_emb(encoding, q)
+        k = apply_cached_rotary_emb(encoding, k)
+        context = self.inner_attn(q, k, v, mask=mask)
+        message = self.out_proj(context.transpose(1, 2).flatten(start_dim=-2))
+        return x + self.ffn(torch.cat([x, message], -1))
+
 class CrossBlock(nn.Module):
     def __init__(
-        self, embed_dim: int, num_heads: int, flash: bool = False, bias: bool = True
+        self, embed_dim: int, num_heads: int, flash: bool = True, bias: bool = True
     ) -> None:
         super().__init__()
         self.heads = num_heads
@@ -305,7 +339,7 @@ class CrossBlock(nn.Module):
             nn.Linear(2 * embed_dim, embed_dim),
         )
         if flash and FLASH_AVAILABLE:
-            self.flash = MultiheadDiffAttn(embed_dim=embed_dim, depth=0, num_heads=num_heads, num_kv_heads=None)
+            self.flash = Attention(True)
         else:
             self.flash = None
 
@@ -315,22 +349,18 @@ class CrossBlock(nn.Module):
     def forward(
         self, x0: torch.Tensor, x1: torch.Tensor, mask: Optional[torch.Tensor] = None
     ) -> List[torch.Tensor]:
-        qk0, qk1 = self.map_(self.to_qk, x0, x1)    # [B, N, D_]
+        qk0, qk1 = self.map_(self.to_qk, x0, x1)
         v0, v1 = self.map_(self.to_v, x0, x1)
-        # qk0, qk1, v0, v1 = map(
-        #     lambda t: t.unflatten(-1, (self.heads, -1)).transpose(1, 2),
-        #     (qk0, qk1, v0, v1),
-        # )
+        qk0, qk1, v0, v1 = map(
+            lambda t: t.unflatten(-1, (self.heads, -1)).transpose(1, 2),
+            (qk0, qk1, v0, v1),
+        )
         if self.flash is not None and qk0.device.type == "cuda":
-            m0 = self.flash(qk0, qk1, v1, attn_mask=mask)
+            m0 = self.flash(qk0, qk1, v1, mask)
             m1 = self.flash(
                 qk1, qk0, v0, mask.transpose(-1, -2) if mask is not None else None
             )
         else:
-            qk0, qk1, v0, v1 = map(
-                lambda t: t.unflatten(-1, (self.heads, -1)).transpose(1, 2),
-                (qk0, qk1, v0, v1),
-            )
             qk0, qk1 = qk0 * self.scale**0.5, qk1 * self.scale**0.5
             sim = torch.einsum("bhid, bhjd -> bhij", qk0, qk1)
             if mask is not None:
@@ -341,7 +371,7 @@ class CrossBlock(nn.Module):
             m1 = torch.einsum("bhji, bhjd -> bhid", attn10.transpose(-2, -1), v0)
             if mask is not None:
                 m0, m1 = m0.nan_to_num(), m1.nan_to_num()
-            m0, m1 = self.map_(lambda t: t.transpose(1, 2).flatten(start_dim=-2), m0, m1)
+        m0, m1 = self.map_(lambda t: t.transpose(1, 2).flatten(start_dim=-2), m0, m1)
         m0, m1 = self.map_(self.to_out, m0, m1)
         x0 = x0 + self.ffn(torch.cat([x0, m0], -1))
         x1 = x1 + self.ffn(torch.cat([x1, m1], -1))
@@ -351,7 +381,39 @@ class CrossBlock(nn.Module):
 class TransformerLayer(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
-        self.self_attn = SelfBlock(*args, **kwargs)
+        self.self_attn = SelfBlock_mulit(*args, **kwargs)
+        self.cross_attn = CrossBlock(*args, **kwargs)
+
+    def forward(
+        self,
+        desc0,
+        desc1,
+        encoding0,
+        encoding1,
+        mask0: Optional[torch.Tensor] = None,
+        mask1: Optional[torch.Tensor] = None,
+    ):
+        if mask0 is not None and mask1 is not None:
+            return self.masked_forward(desc0, desc1, encoding0, encoding1, mask0, mask1)
+        else:
+            desc0 = self.self_attn(desc0, encoding0)
+            desc1 = self.self_attn(desc1, encoding1)
+            return self.cross_attn(desc0, desc1)
+
+    # This part is compiled and allows padding inputs
+    def masked_forward(self, desc0, desc1, encoding0, encoding1, mask0, mask1):
+        mask = mask0 & mask1.transpose(-1, -2)
+        mask0 = mask0 & mask0.transpose(-1, -2)
+        mask1 = mask1 & mask1.transpose(-1, -2)
+        desc0 = self.self_attn(desc0, encoding0, mask0)
+        desc1 = self.self_attn(desc1, encoding1, mask1)
+        return self.cross_attn(desc0, desc1, mask)
+
+
+class TransformerLayer_da(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.self_attn = SelfBlock_da(*args, **kwargs)
         self.cross_attn = CrossBlock(*args, **kwargs)
 
     def forward(
@@ -478,9 +540,10 @@ class LightGlue(nn.Module):
 
         h, n, d = conf.num_heads, conf.n_layers, conf.descriptor_dim
 
-        self.transformers = nn.ModuleList(
-            [TransformerLayer(d, h, conf.flash) for _ in range(n)]
-        )
+        self.transformers = nn.ModuleList([
+        TransformerLayer(d, h, conf.flash) if i % 2 == 0 else TransformerLayer_da(d, h, conf.flash) for i in range(n)
+        ])
+
 
         self.log_assignment = nn.ModuleList([MatchAssignment(d) for _ in range(n)])
         self.token_confidence = nn.ModuleList(

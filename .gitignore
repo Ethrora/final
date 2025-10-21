@@ -5,6 +5,5 @@
 /.idea/
 /venv/
 /data/
-/outputs/
+# /outputs/
 __pycache__
-train.log

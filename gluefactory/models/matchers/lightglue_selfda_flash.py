@@ -13,8 +13,13 @@ from ...settings import DATA_PATH
 from ..utils.losses import NLLLoss
 from ..utils.metrics import matcher_metrics
 from ..utils.rotary import apply_rotary_emb
-from ..utils.rms_norm import RMSNorm
 
+from flash_attn import flash_attn_func
+try:
+    from apex.normalization import FusedRMSNorm as RMSNorm 
+except ModuleNotFoundError:
+    print("No fused RMSNorm")
+    from ..utils.rms_norm import RMSNorm
 
 FLASH_AVAILABLE = hasattr(F, "scaled_dot_product_attention")
 
@@ -24,7 +29,7 @@ torch.backends.cudnn.deterministic = True
 AMP_CUSTOM_FWD_F32 = (
     torch.amp.custom_fwd(cast_inputs=torch.float32, device_type="cuda")
     if hasattr(torch.amp, "custom_fwd")
-    else torch.amp.custom_fwd(cast_inputs=torch.float32)
+    else torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
 )
 
 
@@ -41,7 +46,6 @@ def normalize_keypoints(
     scale = size.max(-1).values / 2
     kpts = (kpts - shift[..., None, :]) / scale[..., None, None]
     return kpts
-
 
 
 class LearnableFourierPositionalEncoding(nn.Module):
@@ -89,16 +93,6 @@ class TokenConfidence(nn.Module):
         ) / 2.0
 
 
-def rotate_half(x: torch.Tensor) -> torch.Tensor:
-    x = x.unflatten(-1, (-1, 2))
-    x1, x2 = x.unbind(dim=-1)
-    return torch.stack((-x2, x1), dim=-1).flatten(start_dim=-2)
-
-
-def apply_cached_rotary_emb(freqs: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-    return (t * freqs[0]) + (rotate_half(t) * freqs[1])
-
-
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     """torch.repeat_interleave(x, dim=1, repeats=n_rep)"""
     bs, n_kv_heads, slen, head_dim = x.shape
@@ -114,7 +108,47 @@ def lambda_init_fn(depth):
     return 0.8 - 0.6 * math.exp(-0.3 * depth)
 
 
-class MultiheadDiffAttn(nn.Module):
+# def compute_rel_pos_for_flashdiff2(batch_size, seq_len, embed_dim, num_heads, device):
+#     """
+#     为 MultiheadFlashDiff2 计算合适的 rel_pos 参数
+    
+#     参数:
+#         batch_size: 批次大小
+#         seq_len: 序列长度
+#         embed_dim: 嵌入维度
+#         num_heads: 头数
+#         device: 设备类型
+    
+#     返回:
+#         rel_pos: (cos, sin) 元组，可直接传递给 forward 方法
+#     """
+#     # 在 FlashDiff2 中，head_dim = embed_dim // num_heads // 2
+#     head_dim = embed_dim // num_heads // 2
+    
+#     # rotary_dim 通常等于 head_dim，因为需要对整个 head_dim 应用旋转编码
+#     rotary_dim = head_dim
+    
+#     # 生成旋转位置编码
+#     cos, sin = get_rotary_pos_embedding(seq_len, rotary_dim, device)
+    
+#     return cos, sin
+
+
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    x = x.unflatten(-1, (-1, 2))
+    x1, x2 = x.unbind(dim=-1)
+    return torch.stack((-x2, x1), dim=-1).flatten(start_dim=-2)
+
+
+def apply_cached_rotary_emb(freqs: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    return (t * freqs[0]) + (rotate_half(t) * freqs[1])
+
+
+class MultiheadFlashDiff2(nn.Module):
+    """
+    DiffAttn implemented with FlashAttention, for packages that does not support different qk/v dimensions
+    e.g., flash-attention (https://github.com/Dao-AILab/flash-attention)
+    """
     def __init__(
         self,
         embed_dim,
@@ -139,9 +173,9 @@ class MultiheadDiffAttn(nn.Module):
         self.head_dim = embed_dim // num_heads // 2
         self.scaling = self.head_dim ** -0.5
         
-        # self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        # self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
-        # self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
         # depth means current layer index
@@ -156,51 +190,48 @@ class MultiheadDiffAttn(nn.Module):
     def forward(
         self,
         q, k, v,
-        attn_mask=None,
+        # rel_pos,
+        encoding,
+        mask=None,
     ):
         bsz, _, tgt_len, _ = q.size()   # [B, 2*H, N, D], [B, 2*H, N, D], [B, H, N, 2*D]
         src_len = tgt_len
 
-        # q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)         # [B, N, 2*H, D]
-        # k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)      # [B, N, 2*H, D]
-        # v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim)      # [B, N, H, 2*D]
+        # q = self.q_proj(x)
+        # k = self.k_proj(x)
+        # v = self.v_proj(x)
 
-        # # cos, sin = build_rotary_pos_emb_interleaved(seq_len=tgt_len,rotary_dim=self.head_dim//2,device='cuda')
-        # # rel_pos = (cos, sin)
-        # q = apply_cached_rotary_emb(encoding, q)
-        # k = apply_cached_rotary_emb(encoding, k)
+        q = apply_cached_rotary_emb(encoding, q)
+        k = apply_cached_rotary_emb(encoding, k)
+
+        q = q.reshape(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
+        k = k.reshape(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
+        v = v.reshape(bsz, src_len, self.num_kv_heads, 2, self.head_dim)
 
         offset = src_len - tgt_len
-        # q = q.transpose(1, 2)   # [B, 2*H, N, D]
-        k = repeat_kv(k, self.n_rep)    # [B, 2*H, N, D]
-        v = repeat_kv(v, self.n_rep)    # [B, H, N, 2*D]
-        q *= self.scaling
-        attn_weights = torch.matmul(q, k.transpose(-1, -2))    # [B, 2*H, N, N]
-        if attn_mask is None:
-            attn_mask = torch.triu(
-                torch.zeros([tgt_len, src_len])    # [N, N]
-                .float()
-                .fill_(float("-inf"))
-                .type_as(attn_weights),
-                1 + offset,
-            )
-        attn_weights = torch.nan_to_num(attn_weights)
-        attn_weights += attn_mask   
-        attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).type_as(
-            attn_weights
-        )
+        q = q.reshape(bsz, tgt_len, self.num_heads, 2, self.head_dim)
+        k = k.reshape(bsz, src_len, self.num_kv_heads, 2, self.head_dim)
+        q1, q2 = q[:, :, :, 0], q[:, :, :, 1]
+        k1, k2 = k[:, :, :, 0], k[:, :, :, 1]
+        v1, v2 = v[:, :, :, 0], v[:, :, :, 1]
 
+        attn11 = flash_attn_func(q1.to(torch.bfloat16), k1.to(torch.bfloat16), v1.to(torch.bfloat16), causal=True).float()
+        attn12 = flash_attn_func(q1.to(torch.bfloat16), k1.to(torch.bfloat16), v2.to(torch.bfloat16), causal=True).float()
+        attn1 = torch.cat([attn11, attn12], dim=-1)
+        
+        attn21 = flash_attn_func(q2.to(torch.bfloat16), k2.to(torch.bfloat16), v1.to(torch.bfloat16), causal=True).float()
+        attn22 = flash_attn_func(q2.to(torch.bfloat16), k2.to(torch.bfloat16), v2.to(torch.bfloat16), causal=True).float()
+        attn2 = torch.cat([attn21, attn22], dim=-1)
+        
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
         lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
         lambda_full = lambda_1 - lambda_2 + self.lambda_init
-        attn_weights = attn_weights.view(bsz, self.num_heads, 2, tgt_len, src_len)
-        attn_weights = attn_weights[:, :, 0] - lambda_full * attn_weights[:, :, 1]
-        
-        attn = torch.matmul(attn_weights, v)
+        attn = attn1 - lambda_full * attn2
+
         attn = self.subln(attn)
         attn = attn * (1 - self.lambda_init)
-        attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * 2 * self.head_dim)
-
+        attn = attn.reshape(bsz, tgt_len, self.num_heads * 2 * self.head_dim)
+        
         attn = self.out_proj(attn)
         return attn
 
@@ -241,7 +272,7 @@ class MultiheadDiffAttn(nn.Module):
 
 class SelfBlock(nn.Module):
     def __init__(
-        self, embed_dim: int, num_heads: int, bias: bool = True, num_kv_heads=None,
+        self, embed_dim: int, num_heads: int, flash: bool = False, bias: bool = True, num_kv_heads=None
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
@@ -250,7 +281,7 @@ class SelfBlock(nn.Module):
         # assert self.embed_dim % num_heads == 0
         self.head_dim = self.embed_dim // num_heads // 2
         self.Wqkv = nn.Linear(embed_dim, 3 * embed_dim, bias=bias)
-        self.inner_attn = MultiheadDiffAttn(embed_dim=embed_dim, depth=0, num_heads=num_heads, num_kv_heads=None)
+        self.inner_attn = MultiheadFlashDiff2(embed_dim=embed_dim, depth=0, num_heads=num_heads, num_kv_heads=None)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
         self.ffn = nn.Sequential(
             nn.Linear(2 * embed_dim, 2 * embed_dim),
@@ -265,7 +296,7 @@ class SelfBlock(nn.Module):
         encoding: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        qkv = self.Wqkv(x)  # [B, N, 3*D]
+        qkv = self.Wqkv(x)  # [B, N, 3D]
         qkv = qkv.unflatten(-1, (-1, 3))    # [B, N, D, 3]
         q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
 
@@ -276,13 +307,10 @@ class SelfBlock(nn.Module):
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim).transpose(1, 2)      # [B, 2*H, N, D]
         v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim).transpose(1, 2)      # [B, H, N, 2*D]
 
-        # cos, sin = build_rotary_pos_emb_interleaved(seq_len=tgt_len,rotary_dim=self.head_dim//2,device='cuda')
+        # cos, sin = compute_rel_pos_for_flashdiff2(bsz, tgt_len, self.head_dim, self.num_heads, x.device)
         # rel_pos = (cos, sin)
-        q = apply_cached_rotary_emb(encoding, q)    # [B, 2*H, N, D]
-        k = apply_cached_rotary_emb(encoding, k)
-
-        context = self.inner_attn(q, k, v, attn_mask=mask)  # [B, N, D]
-        message = self.out_proj(context)  # [B, N, D]
+        context = self.inner_attn(q, k, v, encoding, mask=mask)
+        message = self.out_proj(context)
         return x + self.ffn(torch.cat([x, message], -1))
 
 
@@ -305,7 +333,7 @@ class CrossBlock(nn.Module):
             nn.Linear(2 * embed_dim, embed_dim),
         )
         if flash and FLASH_AVAILABLE:
-            self.flash = MultiheadDiffAttn(embed_dim=embed_dim, depth=0, num_heads=num_heads, num_kv_heads=None)
+            self.flash = MultiheadFlashDiff2(embed_dim=embed_dim, depth=0, num_heads=num_heads, num_kv_heads=None)
         else:
             self.flash = None
 
@@ -322,7 +350,7 @@ class CrossBlock(nn.Module):
         #     (qk0, qk1, v0, v1),
         # )
         if self.flash is not None and qk0.device.type == "cuda":
-            m0 = self.flash(qk0, qk1, v1, attn_mask=mask)
+            m0 = self.flash(qk0, qk1, v1, mask=mask)
             m1 = self.flash(
                 qk1, qk0, v0, mask.transpose(-1, -2) if mask is not None else None
             )
